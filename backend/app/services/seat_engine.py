@@ -35,14 +35,19 @@ class Violation:
 class QuotaShortage(Exception):
     """前排名额不足以容纳全部特殊考生；整场排座失败，不产生方案。"""
 
-    def __init__(self, special_count: int, quota_total: int, front_rows: int):
+    def __init__(self, special_count: int, quota_total: int, front_rows: int,
+                 geometric: bool = False):
         self.special_count = special_count
         self.quota_total = quota_total
         self.front_rows = front_rows
-        super().__init__(
-            f"前排名额不足：特殊考生 {special_count} 人，名额格仅 {quota_total} 个"
-            f"（前排行数 {front_rows}）"
-        )
+        self.geometric = geometric
+        if geometric:
+            msg = (f"前排几何放不下全部特殊考生：{special_count} 人无法在前 {front_rows} 行"
+                   f"（{quota_total} 格）内满足间距/同卷约束")
+        else:
+            msg = (f"前排名额不足：特殊考生 {special_count} 人，名额格仅 {quota_total} 个"
+                   f"（前排行数 {front_rows}）")
+        super().__init__(msg)
 
 
 def manhattan(a: tuple[int, int], b: tuple[int, int]) -> int:
@@ -106,11 +111,12 @@ def place_candidates(
     名额不足以容纳特殊考生则抛 :class:`QuotaShortage`，不留半成品。
     """
     # 名额在提交瞬间现算，调用方传入的 front_rows 即当前考室配置，无任何缓存。
+    specials = [c for c in candidates if c.get("special")]
     quota_total = front_rows * cols
 
-    # 名额不够“账本”这一关直接失败：绝不先把普通人排满再把特殊考生丢进未排。
-    if front_rows > 0 and len([c for c in candidates if c.get("special")]) > quota_total:
-        raise QuotaShortage(len([c for c in candidates if c.get("special")]), quota_total, front_rows)
+    # 名额数这一关先过：绝不先把普通人排满再把特殊考生丢进未排。
+    if front_rows > 0 and len(specials) > quota_total:
+        raise QuotaShortage(len(specials), quota_total, front_rows)
 
     occupied: dict[tuple[int, int], SeatAssign] = {}
     unplaced: list[dict] = []
@@ -136,12 +142,13 @@ def place_candidates(
                 unplaced.append(cand)
     else:
         # 第一阶段：特殊考生先排，只消耗名额格，绝不落到非名额区。
-        special = [c for c in candidates if c.get("special")]
+        # 名额数虽够但前排几何（间距/同卷相邻）放不下任一人，同样整场失败。
+        for cand in specials:
+            if not try_place(cand, range(0, front_rows), is_special=True):
+                raise QuotaShortage(len(specials), quota_total, front_rows, geometric=True)
+        # 第二阶段：普通人只准进非名额格；名额格宁可空着，也不用普通人凑前排。
         for cand in [c for c in candidates if not c.get("special")]:
-            if not try_place(cand, range(0, rows), is_special=False):
-                unplaced.append(cand)
-        for cand in special:
-            if not try_place(cand, range(0, rows), is_special=True):
+            if not try_place(cand, range(front_rows, rows), is_special=False):
                 unplaced.append(cand)
 
     assigns = list(occupied.values())
@@ -169,7 +176,7 @@ def verify_consistency(assigns: list[SeatAssign], quota: dict) -> None:
     front_rows = quota["front_rows"]
     in_front = [a for a in assigns if a.row < front_rows]
     # 名额格内只允许特殊考生；普通人占名额格即账图不符。
-    if False and any(not a.special for a in in_front):
+    if any(not a.special for a in in_front):
         raise ValueError("名额台账与座位图不一致：名额格被普通考生占用")
     used = len(in_front)
     if used != quota["quota_used"]:

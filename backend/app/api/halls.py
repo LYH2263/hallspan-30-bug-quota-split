@@ -26,14 +26,14 @@ def list_halls(db: Session = Depends(get_db)):
 
 @router.put("/{hall_id}/front-rows")
 def set_front_rows(hall_id: int, body: FrontRowsIn, db: Session = Depends(get_db)):
-    """改前排行数并原子重排。负数/超行拒绝保存；名额不足整单回滚。"""
+    """改前排行数并原子重排。负数/超行拒绝保存；名额不足整单回滚。
+
+    被拒绝时本端点不做任何写：行数、台账、最新方案全部停在拒绝前。
+    """
     try:
         _plan, result = update_front_rows(db, hall_id, body.front_rows)
     except SeatingRejected as exc:
-        hall_row = db.get(Hall, hall_id)
-        if hall_row is not None:
-            hall_row.front_rows = body.front_rows
-            db.commit()
+        # 服务层已 rollback；此处绝不能再把被拒的 front_rows 写回考室行。
         status = 404 if exc.code == "not_found" else 400
         raise HTTPException(status, {"code": exc.code, "detail": str(exc)})
     hall = db.get(Hall, hall_id)

@@ -204,6 +204,35 @@ def test_front_rows_zero_disables_and_reenables(ctx):
     stats = client.get("/api/seating/stats?hall_id=1").json()
     assert stats["quota_enabled"] is False
 
+    # 0 -> 1 重新开启：名额按当轮格子现算，绝不沿用上一轮台账或继续拦人。
+    r = client.put("/api/halls/1/front-rows", json={"front_rows": 1})
+    assert r.status_code == 200, r.text
+    q = r.json()["quota"]
+    assert q["enabled"] is True and q["front_rows"] == 1
+    assert q["quota_total"] == 6 and q["quota_used"] == 2
+    s = session()
+    led = _ledger(s, M)
+    assert led.front_rows == 1 and led.quota_total == 6 and led.quota_used == 2
+    s.close()
+
+
+def test_ordinary_unplaced_does_not_count_against_quota(ctx):
+    """名额区外几何放不下的普通人进未排（合法），名额已耗仍只等于前排特殊人数。"""
+    client, make_world, session, M = ctx
+    # 3 行 x 4 列、间距 3：两名特殊考生可在第 0 行（0,0)/(0,3) 落位，
+    # 但普通人只剩 1~2 行里极少数格，10 名普通人必有未排。
+    make_world(special_indexes=(0, 1), front_rows=1, rows=3, cols=4, min_dist=3)
+    r = client.post("/api/seating/run?hall_id=1")
+    assert r.status_code == 200, r.text
+    d = r.json()
+    front = [a for a in d["assignments"] if a["row"] == 0]
+    assert len(front) == 2 and all(a["special"] for a in front)
+    assert d["quota"]["quota_used"] == 2
+    assert len(d["unplaced"]) > 0  # 普通人未排，不算整场失败
+    st = client.get("/api/seating/stats?hall_id=1").json()
+    assert st["unplaced"] == len(d["unplaced"])
+    assert st["front_occupied"] == st["quota_used"] == 2
+
 
 # ---------- 历史方案钉死 ----------
 
