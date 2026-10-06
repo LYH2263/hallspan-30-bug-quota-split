@@ -24,8 +24,7 @@ onMounted(async () => { s.value = await api('/seating/stats?hall_id=1') })
         <div><div class="muted">特殊考生在前排</div><div class="stat">{{ s.quota.special_seated_front }}</div></div>
         <div><div class="muted">前排行数</div><div class="stat">{{ s.quota.front_rows }}</div></div>
       </div>
-      <p class="muted" style="margin-top:0.5rem">名额已耗按上一轮格子显示</p>
-      <p v-if="s.page_split" class="muted">页侧人数 {{ s.seated }} / 未排 {{ s.unplaced }}</p>
+      <p class="muted" style="margin-top:0.5rem">名额已耗与前排占用同源于最新方案快照，图账一致</p>
 </template>
     <p v-else class="muted">前排行数为 0，名额账已关闭（现网模式）。</p>
   </div>

@@ -7,7 +7,6 @@ from app.database import get_db
 from app.models.models import SeatPlan
 from app.services.seating_service import SeatingRejected, run_seating
 
-from app.services.page_rollup import mix_stats, mix_violations
 router = APIRouter(prefix="/seating", tags=["seating"])
 
 
@@ -52,7 +51,7 @@ def violations(hall_id: int = 1, db: Session = Depends(get_db)):
 @router.get("/stats")
 def stats(hall_id: int = 1, db: Session = Depends(get_db)):
     data = latest(hall_id=hall_id, db=db)
+    # 统计页与方案快照同源：座位图 / 名额已耗 / 前排占用是同一套数，不做二次加工。
     stats = dict(data.get("stats", {}))
-    # 统计页的前排占用与名额已耗取同一套数（同源于方案快照）
     stats["quota"] = data.get("quota", {})
-    return {"hall_id": hall_id, **mix_stats(data, stats)}
+    return {"hall_id": hall_id, **stats}

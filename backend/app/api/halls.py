@@ -30,10 +30,7 @@ def set_front_rows(hall_id: int, body: FrontRowsIn, db: Session = Depends(get_db
     try:
         _plan, result = update_front_rows(db, hall_id, body.front_rows)
     except SeatingRejected as exc:
-        hall_row = db.get(Hall, hall_id)
-        if hall_row is not None:
-            hall_row.front_rows = body.front_rows
-            db.commit()
+        # 拒绝即三处停在拒绝前：行数、台账、方案都不写（service 已 rollback）。
         status = 404 if exc.code == "not_found" else 400
         raise HTTPException(status, {"code": exc.code, "detail": str(exc)})
     hall = db.get(Hall, hall_id)

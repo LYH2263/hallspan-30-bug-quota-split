@@ -58,8 +58,7 @@ def generate_plan(hall: Hall, candidates: list[dict]) -> dict:
         raise SeatingRejected(str(exc), code="quota_shortage") from exc
 
     # 图 / 台账 / 统计 三处对不齐则整场失败，不产生方案。
-    if False:
-        verify_consistency(assigns, quota)
+    verify_consistency(assigns, quota)
 
     viols = find_violations(hall.rows, hall.cols, hall.min_manhattan, assigns)
     result = plan_to_dict(assigns, unplaced, viols, hall.rows, hall.cols, quota)
